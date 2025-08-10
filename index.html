@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フォトフレームカメラ</title>
+<style>
+  body { margin:0; text-align:center; background:#000; color:white; font-family:sans-serif; }
+  video, canvas { max-width: 100%; height: auto; }
+  #controls { margin: 10px 0; }
+  button { padding:10px 20px; margin:5px; font-size:16px; }
+  #framePreview { position:absolute; top:0; left:0; pointer-events:none; }
+  #cameraWrapper { position: relative; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h2>フォトフレームカメラ</h2>
+
+<div id="controls">
+  <button onclick="setFrame(0)">フレーム1</button>
+  <button onclick="setFrame(1)">フレーム2</button>
+  <button onclick="takePhoto()">📸 撮影</button>
+</div>
+
+<div id="cameraWrapper">
+  <video id="video" autoplay playsinline></video>
+  <img id="framePreview" src="frame1.png">
+</div>
+
+<br><br>
+<canvas id="canvas" style="display:none;"></canvas>
+<a id="downloadLink" download="framed-photo.png" style="display:none;">画像を保存</a>
+
+<script>
+const video = document.getElementById('video');
+const framePreview = document.getElementById('framePreview');
+const canvas = document.getElementById('canvas');
+const downloadLink = document.getElementById('downloadLink');
+
+const frameImages = ["frame1.png", "frame2.png"];
+let currentFrameIndex = 0;
+let frameImageObj = new Image();
+frameImageObj.src = frameImages[0];
+
+// カメラ起動
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    video.srcObject = stream;
+  } catch (err) {
+    alert("カメラを起動できません: " + err);
+  }
+}
+
+// フレーム切替
+function setFrame(index) {
+  currentFrameIndex = index;
+  framePreview.src = frameImages[index];
+  frameImageObj.src = frameImages[index];
+}
+
+// 撮影
+function takePhoto() {
+  frameImageObj.onload = () => {
+    // フレームサイズを基準にCanvas作成
+    const w = frameImageObj.width;
+    const h = frameImageObj.height;
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext('2d');
+
+    // カメラ映像をフレームサイズに合わせて描画
+    ctx.drawImage(video, 0, 0, w, h);
+
+    // フレームを重ねる
+    ctx.drawImage(frameImageObj, 0, 0, w, h);
+
+    // 保存リンク設定
+    const dataURL = canvas.toDataURL('image/png');
+    downloadLink.href = dataURL;
+    downloadLink.style.display = 'inline-block';
+    downloadLink.textContent = "画像を保存";
+  };
+}
+
+startCamera();
+</script>
+
+</body>
+</html>
