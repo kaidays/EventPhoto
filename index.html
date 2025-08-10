@@ -3,92 +3,135 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>フォトフレームカメラ</title>
+<title>カメラフレーム撮影</title>
 <style>
-  body { margin:0; text-align:center; background:#000; color:white; font-family:sans-serif; }
-  video, canvas { max-width: 100%; height: auto; }
-  #controls { margin: 10px 0; }
-  button { padding:10px 20px; margin:5px; font-size:16px; }
-  #framePreview { position:absolute; top:0; left:0; pointer-events:none; }
-  #cameraWrapper { position: relative; display:inline-block; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: black;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+  canvas {
+    display: none;
+  }
+  .frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    transform: translate(-50%, -50%);
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .controls {
+    position: absolute;
+    bottom: 50px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+  }
+  .shutter-btn {
+    width: 80px;
+    height: 80px;
+    background: white;
+    border-radius: 50%;
+    border: 5px solid #ccc;
+    cursor: pointer;
+  }
+  .switch-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255,255,255,0.7);
+    border: none;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 3;
+  }
 </style>
 </head>
 <body>
-
-<h2>フォトフレームカメラ</h2>
-
-<div id="controls">
-  <button onclick="setFrame(0)">フレーム1</button>
-  <button onclick="setFrame(1)">フレーム2</button>
-  <button onclick="takePhoto()">📸 撮影</button>
-</div>
-
-<div id="cameraWrapper">
   <video id="video" autoplay playsinline></video>
-  <img id="framePreview" src="frame1.png">
-</div>
-
-<br><br>
-<canvas id="canvas" style="display:none;"></canvas>
-<a id="downloadLink" download="framed-photo.png" style="display:none;">画像を保存</a>
-
+  <img id="frame" class="frame" src="frame1.png">
+  <button class="switch-btn" id="switchBtn">フレーム切替</button>
+  <div class="controls">
+    <div class="shutter-btn" id="shutterBtn"></div>
+  </div>
+  <canvas id="canvas" width="1080" height="1920"></canvas>
 <script>
+let currentFrame = 1;
 const video = document.getElementById('video');
-const framePreview = document.getElementById('framePreview');
+const frame = document.getElementById('frame');
 const canvas = document.getElementById('canvas');
-const downloadLink = document.getElementById('downloadLink');
+const ctx = canvas.getContext('2d');
+const shutterBtn = document.getElementById('shutterBtn');
+const switchBtn = document.getElementById('switchBtn');
 
-const frameImages = ["frame1.png", "frame2.png"];
-let currentFrameIndex = 0;
-let frameImageObj = new Image();
-frameImageObj.src = frameImages[0];
-
-// カメラ起動
-async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }
-    });
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+  .then(stream => {
     video.srcObject = stream;
-  } catch (err) {
-    alert("カメラを起動できません: " + err);
+  })
+  .catch(err => {
+    alert("カメラが使用できません: " + err);
+  });
+
+switchBtn.addEventListener('click', () => {
+  currentFrame = currentFrame === 1 ? 2 : 1;
+  frame.src = currentFrame === 1 ? "frame1.png" : "frame2.png";
+});
+
+shutterBtn.addEventListener('click', () => {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const videoRatio = video.videoWidth / video.videoHeight;
+  const targetRatio = canvas.width / canvas.height;
+  let drawWidth, drawHeight, offsetX, offsetY;
+
+  if (videoRatio > targetRatio) {
+    drawHeight = canvas.height;
+    drawWidth = video.videoWidth * (canvas.height / video.videoHeight);
+    offsetX = (canvas.width - drawWidth) / 2;
+    offsetY = 0;
+  } else {
+    drawWidth = canvas.width;
+    drawHeight = video.videoHeight * (canvas.width / video.videoWidth);
+    offsetX = 0;
+    offsetY = (canvas.height - drawHeight) / 2;
   }
-}
 
-// フレーム切替
-function setFrame(index) {
-  currentFrameIndex = index;
-  framePreview.src = frameImages[index];
-  frameImageObj.src = frameImages[index];
-}
+  ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
-// 撮影
-function takePhoto() {
-  frameImageObj.onload = () => {
-    // フレームサイズを基準にCanvas作成
-    const w = frameImageObj.width;
-    const h = frameImageObj.height;
-    canvas.width = w;
-    canvas.height = h;
-
-    const ctx = canvas.getContext('2d');
-
-    // カメラ映像をフレームサイズに合わせて描画
-    ctx.drawImage(video, 0, 0, w, h);
-
-    // フレームを重ねる
-    ctx.drawImage(frameImageObj, 0, 0, w, h);
-
-    // 保存リンク設定
-    const dataURL = canvas.toDataURL('image/png');
-    downloadLink.href = dataURL;
-    downloadLink.style.display = 'inline-block';
-    downloadLink.textContent = "画像を保存";
+  const img = new Image();
+  img.src = frame.src;
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const link = document.createElement('a');
+    link.download = 'photo.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
   };
-}
-
-startCamera();
+});
 </script>
-
 </body>
 </html>
